@@ -1,0 +1,1 @@
+# Promisify node-firebird
