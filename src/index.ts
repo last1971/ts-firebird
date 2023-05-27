@@ -1,1 +1,3 @@
-export const Greeter = (name: string) => `Hello ${name}`;
+import FirebirdDatabase from './firebird.database';
+
+export { FirebirdDatabase };
