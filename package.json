@@ -1,11 +1,11 @@
 {
   "name": "ts-firebird",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Promisify node-firebird",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "build": "tsc",
