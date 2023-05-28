@@ -1,5 +1,6 @@
-import { Database, Options, attach, create, attachOrCreate } from 'node-firebird';
+import { Database, Options, attach, create, attachOrCreate, Isolation } from 'node-firebird';
 import { promisify } from 'util';
+import FirebirdTransaction from './firebird.transaction';
 export default class FirebirdDatabase {
     private db: Database;
     async attach(options: Options): Promise<FirebirdDatabase> {
@@ -29,5 +30,8 @@ export default class FirebirdDatabase {
     async execute(query: string, params: any[]): Promise<any[]> {
         this.checkDb();
         return promisify(this.db.execute)(query, params);
+    }
+    async transaction(isolation: Isolation): Promise<FirebirdTransaction> {
+        return new FirebirdTransaction(await promisify(this.db.transaction)(isolation));
     }
 }
