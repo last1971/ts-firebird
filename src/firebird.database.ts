@@ -32,6 +32,8 @@ export default class FirebirdDatabase {
         return promisify(this.db.execute)(query, params);
     }
     async transaction(isolation: Isolation): Promise<FirebirdTransaction> {
-        return new FirebirdTransaction(await promisify(this.db.transaction)(isolation));
+        this.checkDb();
+        const asyncTransaction = promisify(this.db.transaction);
+        return new FirebirdTransaction(await asyncTransaction.call(this.db, isolation));
     }
 }
