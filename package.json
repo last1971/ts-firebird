@@ -1,6 +1,6 @@
 {
   "name": "ts-firebird",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Promisify node-firebird",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
