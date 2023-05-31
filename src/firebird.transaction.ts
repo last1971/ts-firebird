@@ -8,12 +8,15 @@ export default class FirebirdTransaction {
         return asyncQuery.call(this.transaction, query, params);
     }
     async execute(query: string, params: any[]): Promise<any[]> {
-        return promisify(this.transaction.execute)(query, params);
+        const asyncExecute = promisify(this.transaction.execute);
+        return asyncExecute.call(this.transaction, query, params);
     }
     async commit(): Promise<void> {
-        await promisify(this.transaction.commit)();
+        const asyncCommit = promisify(this.transaction.commit);
+        await asyncCommit.call(this.transaction);
     }
     async rollback(): Promise<void> {
-        await promisify(this.transaction.rollback)();
+        const asyncRollback = promisify(this.transaction.rollback);
+        await asyncRollback.call(this.transaction);
     }
 }
