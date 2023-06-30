@@ -3,13 +3,27 @@ import { promisify } from 'util';
 
 export default class FirebirdTransaction {
     constructor(private transaction: Transaction) {}
-    async query(query: string, params: any[]): Promise<any[]> {
+    async query(query: string, params: any[], autoCommit = false): Promise<any[]> {
         const asyncQuery = promisify(this.transaction.query);
-        return asyncQuery.call(this.transaction, query, params);
+        try {
+            const response = await asyncQuery.call(this.transaction, query, params);
+            if (autoCommit) await this.commit();
+            return response;
+        } catch (e) {
+            if (autoCommit) await this.rollback();
+            throw e;
+        }
     }
-    async execute(query: string, params: any[]): Promise<any[]> {
+    async execute(query: string, params: any[], autoCommit = false): Promise<any[]> {
         const asyncExecute = promisify(this.transaction.execute);
-        return asyncExecute.call(this.transaction, query, params);
+        try {
+            const response = await asyncExecute.call(this.transaction, query, params);
+            if (autoCommit) await this.commit();
+            return response;
+        } catch (e) {
+            if (autoCommit) await this.rollback();
+            throw e;
+        }
     }
     async commit(): Promise<void> {
         const asyncCommit = promisify(this.transaction.commit);
