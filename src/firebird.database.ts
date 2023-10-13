@@ -56,6 +56,6 @@ export default class FirebirdDatabase {
         this.checkDb();
         const db = await this.getDb();
         const asyncTransaction = promisify(db.transaction);
-        return new FirebirdTransaction(await asyncTransaction.call(db, isolation));
+        return new FirebirdTransaction(await asyncTransaction.call(db, isolation), this.pool ? db : null);
     }
 }
