@@ -9,7 +9,8 @@ export default class FirebirdDatabase {
             return this.db;
         }
         const get = promisify(this.pool.get);
-        return get.call(this.pool);
+        const db = await get.call(this.pool);
+        return db;
     }
     async attach(options: Options): Promise<FirebirdDatabase> {
         this.db = await promisify<Options, Database>(attach)(options);
@@ -39,12 +40,17 @@ export default class FirebirdDatabase {
         this.checkDb();
         const db = await this.getDb();
         const asyncQuery = promisify(db.query);
-        return asyncQuery.call(db, query, params);
+        const res = await asyncQuery.call(db, query, params);
+        if (this.pool) db.detach();
+        return res;
     }
     async execute(query: string, params: any[]): Promise<any[]> {
         this.checkDb();
         const db = await this.getDb();
-        return promisify(db.execute)(query, params);
+        const asyncExecute = promisify(db.execute);
+        const res = await asyncExecute.call(db, query, params);
+        if (this.pool) db.detach();
+        return res;
     }
     async transaction(isolation: Isolation): Promise<FirebirdTransaction> {
         this.checkDb();
