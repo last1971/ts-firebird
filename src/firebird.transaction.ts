@@ -1,9 +1,18 @@
-import { Transaction } from 'node-firebird';
+import { Database, Isolation, Transaction } from 'node-firebird';
 import { promisify } from 'util';
 
 export default class FirebirdTransaction {
-    constructor(private transaction: Transaction) {}
+    private transaction: Transaction;
+    constructor(private db: Database, private isolation: Isolation) {}
+    async init(): Promise<void> {
+        const asyncTransaction = promisify(this.db.transaction);
+        this.transaction = await asyncTransaction.call(this.db, this.isolation);
+    }
+    checkTransaction(): void {
+        if (!this.transaction) throw new Error('Transaction is null');
+    }
     async query(query: string, params: any[], autoCommit = false): Promise<any[]> {
+        this.checkTransaction();
         const asyncQuery = promisify(this.transaction.query);
         try {
             const response = await asyncQuery.call(this.transaction, query, params);
@@ -15,6 +24,7 @@ export default class FirebirdTransaction {
         }
     }
     async execute(query: string, params: any[], autoCommit = false): Promise<any[]> {
+        this.checkTransaction();
         const asyncExecute = promisify(this.transaction.execute);
         try {
             const response = await asyncExecute.call(this.transaction, query, params);
@@ -25,12 +35,17 @@ export default class FirebirdTransaction {
             throw e;
         }
     }
-    async commit(): Promise<void> {
+    detach(): void {
+        this.db.detach();
+    }
+    async commit(detach = false): Promise<void> {
         const asyncCommit = promisify(this.transaction.commit);
         await asyncCommit.call(this.transaction);
+        if (detach) this.detach();
     }
-    async rollback(): Promise<void> {
+    async rollback(detach = false): Promise<void> {
         const asyncRollback = promisify(this.transaction.rollback);
         await asyncRollback.call(this.transaction);
+        if (detach) this.detach();
     }
 }

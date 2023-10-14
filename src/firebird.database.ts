@@ -2,7 +2,7 @@ import { Database, Options, attach, create, attachOrCreate, Isolation } from 'no
 import { promisify } from 'util';
 import FirebirdTransaction from './firebird.transaction';
 export default class FirebirdDatabase {
-    private db: Database;
+    constructor(private db: Database = null) {}
     async attach(options: Options): Promise<FirebirdDatabase> {
         this.db = await promisify<Options, Database>(attach)(options);
         return this;
@@ -20,21 +20,30 @@ export default class FirebirdDatabase {
         return fd.attach(options);
     }
     private checkDb(): void {
-        if (!this.db) throw new Error('Create or Attach Database or Pool first');
+        if (!this.db) throw new Error('Database is null');
     }
-    async query(query: string, params: any[]): Promise<any[]> {
+    private detach(): void {
+        this.checkDb();
+        this.db.detach();
+    }
+    async query(query: string, params: any[], detach = false): Promise<any[]> {
         this.checkDb();
         const asyncQuery = promisify(this.db.query);
-        return asyncQuery.call(this.db, query, params);
+        const res = await asyncQuery.call(this.db, query, params);
+        if (detach) this.detach();
+        return res;
     }
-    async execute(query: string, params: any[]): Promise<any[]> {
+    async execute(query: string, params: any[], detach = false): Promise<any[]> {
         this.checkDb();
         const asyncExecute = promisify(this.db.execute);
-        return asyncExecute.call(this.db, query, params);
+        const res = await asyncExecute.call(this.db, query, params);
+        if (detach) this.detach();
+        return res;
     }
     async transaction(isolation: Isolation): Promise<FirebirdTransaction> {
         this.checkDb();
-        const asyncTransaction = promisify(this.db.transaction);
-        return new FirebirdTransaction(await asyncTransaction.call(this.db, isolation));
+        const transaction = new FirebirdTransaction(this.db, isolation);
+        await transaction.init();
+        return transaction;
     }
 }
