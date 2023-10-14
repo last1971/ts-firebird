@@ -1,4 +1,4 @@
-import { ConnectionPool, Isolation, Options, pool } from 'node-firebird';
+import { ConnectionPool, Isolation, ISOLATION_READ_COMMITTED, Options, pool } from 'node-firebird';
 import { promisify } from 'util';
 import FirebirdDatabase from './firebird.database';
 import FirebirdTransaction from './firebird.transaction';
@@ -14,7 +14,7 @@ export default class FirebirdPool {
         return new FirebirdDatabase(await asyncGet.call(this.pool));
     }
 
-    async getTransaction(isolation: Isolation): Promise<FirebirdTransaction> {
+    async getTransaction(isolation: Isolation = ISOLATION_READ_COMMITTED): Promise<FirebirdTransaction> {
         const db = await this.getDatabase();
         return db.transaction(isolation);
     }

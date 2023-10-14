@@ -1,9 +1,9 @@
-import { Database, Isolation, Transaction } from 'node-firebird';
+import { Database, Isolation, ISOLATION_READ_COMMITTED, Transaction } from 'node-firebird';
 import { promisify } from 'util';
 
 export default class FirebirdTransaction {
     private transaction: Transaction;
-    constructor(private db: Database, private isolation: Isolation) {}
+    constructor(private db: Database, private isolation: Isolation = ISOLATION_READ_COMMITTED) {}
     async init(): Promise<void> {
         const asyncTransaction = promisify(this.db.transaction);
         this.transaction = await asyncTransaction.call(this.db, this.isolation);

@@ -1,4 +1,4 @@
-import { Database, Options, attach, create, attachOrCreate, Isolation } from 'node-firebird';
+import { Database, Options, attach, create, attachOrCreate, Isolation, ISOLATION_READ_COMMITTED } from 'node-firebird';
 import { promisify } from 'util';
 import FirebirdTransaction from './firebird.transaction';
 export default class FirebirdDatabase {
@@ -40,7 +40,7 @@ export default class FirebirdDatabase {
         if (detach) this.detach();
         return res;
     }
-    async transaction(isolation: Isolation): Promise<FirebirdTransaction> {
+    async transaction(isolation: Isolation = ISOLATION_READ_COMMITTED): Promise<FirebirdTransaction> {
         this.checkDb();
         const transaction = new FirebirdTransaction(this.db, isolation);
         await transaction.init();
