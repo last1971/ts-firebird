@@ -16,10 +16,10 @@ export default class FirebirdTransaction {
         const asyncQuery = promisify(this.transaction.query);
         try {
             const response = await asyncQuery.call(this.transaction, query, params);
-            if (autoCommit) await this.commit();
+            if (autoCommit) await this.commit(true);
             return response;
         } catch (e) {
-            if (autoCommit) await this.rollback();
+            if (autoCommit) await this.rollback(true);
             throw e;
         }
     }
@@ -28,10 +28,10 @@ export default class FirebirdTransaction {
         const asyncExecute = promisify(this.transaction.execute);
         try {
             const response = await asyncExecute.call(this.transaction, query, params);
-            if (autoCommit) await this.commit();
+            if (autoCommit) await this.commit(true);
             return response;
         } catch (e) {
-            if (autoCommit) await this.rollback();
+            if (autoCommit) await this.rollback(true);
             throw e;
         }
     }
