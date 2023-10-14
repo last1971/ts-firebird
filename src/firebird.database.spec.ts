@@ -6,6 +6,6 @@ describe('Test FirebirdDatabase', () => {
     });
     it('Test checkDb', async () => {
         const fd = new FirebirdDatabase();
-        await expect(fd.query('TEST', [])).rejects.toThrow('Create or Attach Database or Pool first');
+        await expect(fd.query('TEST', [])).rejects.toThrow('Database is null');
     });
 });
