@@ -58,6 +58,6 @@
     "testEnvironment": "node"
   },
   "dependencies": {
-    "node-firebird": "^1.1.5"
+    "node-firebird": "^1.1.9"
   }
 }

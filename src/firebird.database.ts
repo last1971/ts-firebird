@@ -1,8 +1,13 @@
 import { Database, Options, attach, create, attachOrCreate, Isolation, ISOLATION_READ_COMMITTED } from 'node-firebird';
 import { promisify } from 'util';
 import FirebirdTransaction from './firebird.transaction';
-export default class FirebirdDatabase {
-    constructor(private db: Database = null) {}
+import { IDatabaseConnection } from './i.firebird.connection';
+import { IFirebirdListener } from './i.firebird.listener';
+export default class FirebirdDatabase implements IDatabaseConnection {
+    constructor(private db: Database = null, private listener: IFirebirdListener = null) {}
+    getDatabase(): Database {
+        return this.db;
+    }
     async attach(options: Options): Promise<FirebirdDatabase> {
         this.db = await promisify<Options, Database>(attach)(options);
         return this;
@@ -22,9 +27,10 @@ export default class FirebirdDatabase {
     private checkDb(): void {
         if (!this.db) throw new Error('Database is null');
     }
-    private detach(): void {
+    public detach(): void {
         this.checkDb();
         this.db.detach();
+        this.listener?.onDatabaseDetached(this.db);
     }
     async query(query: string, params: any[], detach = false): Promise<any[]> {
         this.checkDb();
@@ -42,8 +48,12 @@ export default class FirebirdDatabase {
     }
     async transaction(isolation: Isolation = ISOLATION_READ_COMMITTED): Promise<FirebirdTransaction> {
         this.checkDb();
-        const transaction = new FirebirdTransaction(this.db, isolation);
+        const transaction = new FirebirdTransaction(this, isolation);
         await transaction.init();
+        this.listener?.onTransactionCreated(this.db, transaction);
         return transaction;
+    }
+    onTransactionClose(transaction: FirebirdTransaction): void {
+        this.listener?.onTransactionClosed(this.db, transaction);
     }
 }

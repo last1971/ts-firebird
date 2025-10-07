@@ -1,9 +1,27 @@
 import { Database, Isolation, ISOLATION_READ_COMMITTED, Transaction } from 'node-firebird';
 import { promisify } from 'util';
+import { IDatabaseConnection } from './i.firebird.connection';
 
 export default class FirebirdTransaction {
     private transaction: Transaction;
-    constructor(private db: Database, private isolation: Isolation = ISOLATION_READ_COMMITTED) {}
+    private db: Database;
+    private connection: IDatabaseConnection = null;
+    private isolation: Isolation = ISOLATION_READ_COMMITTED;
+    constructor(db: Database, isolation?: Isolation);
+    constructor(connection: IDatabaseConnection, isolation?: Isolation);
+    constructor(dbOrConnection: Database | IDatabaseConnection, isolation: Isolation = ISOLATION_READ_COMMITTED) {
+        this.isolation = isolation;
+
+        if ('getDatabase' in dbOrConnection) {
+            // Это IDatabaseConnection
+            this.connection = dbOrConnection as IDatabaseConnection;
+            this.db = this.connection.getDatabase();
+        } else {
+            // Это Database
+            this.db = dbOrConnection as Database;
+        }
+    }
+
     async init(): Promise<void> {
         const asyncTransaction = promisify(this.db.transaction);
         this.transaction = await asyncTransaction.call(this.db, this.isolation);
@@ -36,16 +54,26 @@ export default class FirebirdTransaction {
         }
     }
     detach(): void {
-        this.db.detach();
+        if (this.connection) {
+            this.connection.detach();
+        } else {
+            this.db.detach();
+        }
     }
     async commit(detach = false): Promise<void> {
         const asyncCommit = promisify(this.transaction.commit);
         await asyncCommit.call(this.transaction);
-        if (detach) this.detach();
+        this.onTransactionClose(detach);
     }
     async rollback(detach = false): Promise<void> {
         const asyncRollback = promisify(this.transaction.rollback);
         await asyncRollback.call(this.transaction);
+        this.onTransactionClose(detach);
+    }
+    onTransactionClose(detach: boolean): void {
+        if (this.connection) {
+            this.connection.onTransactionClose(this);
+        }
         if (detach) this.detach();
     }
 }
