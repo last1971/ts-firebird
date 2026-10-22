@@ -176,4 +176,59 @@ describe('Test FirebirdTransaction', () => {
             expect(mockTransaction.rollback).toHaveBeenCalled();
         });
     });
+
+    describe('Dead connection', () => {
+        let mockTransaction: any;
+        let mockDb: any;
+        let mockConnection: IDatabaseConnection;
+
+        beforeEach(() => {
+            mockTransaction = {
+                commit: jest.fn((callback) => callback(new Error('Connection shutdown'))),
+                rollback: jest.fn((callback) => callback(new Error('Connection shutdown'))),
+                query: jest.fn((query, params, callback) => callback(new Error('Connection shutdown'))),
+                execute: jest.fn(),
+            };
+            mockDb = {
+                transaction: jest.fn((isolation, callback) => callback(null, mockTransaction)),
+                detach: jest.fn(),
+            };
+            mockConnection = {
+                getDatabase: jest.fn(() => mockDb),
+                detach: jest.fn(),
+                onTransactionClose: jest.fn(),
+                discardIfDead: jest.fn(),
+            };
+        });
+
+        it('should discard connection and skip rollback on network error with autoCommit', async () => {
+            const tx = new FirebirdTransaction(mockConnection);
+            await tx.init();
+
+            await expect(tx.query('SELECT 1', [], true)).rejects.toThrow('Connection shutdown');
+            expect(mockConnection.discardIfDead).toHaveBeenCalled();
+            expect(mockConnection.onTransactionClose).toHaveBeenCalledWith(tx);
+            // rollback по мёртвому сокету повис бы навсегда
+            expect(mockTransaction.rollback).not.toHaveBeenCalled();
+        });
+
+        it('should discard connection when commit fails with network error', async () => {
+            const tx = new FirebirdTransaction(mockConnection);
+            await tx.init();
+
+            await expect(tx.commit()).rejects.toThrow('Connection shutdown');
+            expect(mockConnection.discardIfDead).toHaveBeenCalled();
+        });
+
+        it('should still rollback on ordinary query error', async () => {
+            mockTransaction.query = jest.fn((query, params, callback) => callback(new Error('Query error')));
+            mockTransaction.rollback = jest.fn((callback) => callback());
+            const tx = new FirebirdTransaction(mockConnection);
+            await tx.init();
+
+            await expect(tx.query('SELECT 1', [], true)).rejects.toThrow('Query error');
+            expect(mockConnection.discardIfDead).not.toHaveBeenCalled();
+            expect(mockTransaction.rollback).toHaveBeenCalled();
+        });
+    });
 });

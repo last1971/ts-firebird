@@ -66,4 +66,40 @@ describe('Test FirebirdDatabase', () => {
             expect(() => db.detach()).not.toThrow();
         });
     });
+
+    describe('Dead connection', () => {
+        let mockDb: any;
+        let mockListener: IFirebirdListener;
+
+        beforeEach(() => {
+            mockDb = {
+                connection: { _pooled: true },
+                detach: jest.fn(),
+                query: jest.fn((query, params, callback) => callback(new Error('Connection shutdown'))),
+                execute: jest.fn((query, params, callback) => callback(new Error('Query error'))),
+            };
+            mockListener = {
+                onTransactionCreated: jest.fn(),
+                onTransactionClosed: jest.fn(),
+                onDatabaseDetached: jest.fn(),
+            } as IFirebirdListener;
+        });
+
+        it('should discard connection on network error in query', async () => {
+            const db = new FirebirdDatabase(mockDb, mockListener);
+
+            await expect(db.query('SELECT 1', [])).rejects.toThrow('Connection shutdown');
+            expect(mockDb.connection._pooled).toBe(false);
+            expect(mockDb.detach).toHaveBeenCalled();
+            expect(mockListener.onDatabaseDetached).toHaveBeenCalledWith(mockDb);
+        });
+
+        it('should keep connection on ordinary error in execute', async () => {
+            const db = new FirebirdDatabase(mockDb, mockListener);
+
+            await expect(db.execute('UPDATE X', [])).rejects.toThrow('Query error');
+            expect(mockDb.connection._pooled).toBe(true);
+            expect(mockDb.detach).not.toHaveBeenCalled();
+        });
+    });
 });

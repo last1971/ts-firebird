@@ -1,6 +1,7 @@
 import { Database, Isolation, ISOLATION_READ_COMMITTED, Transaction } from 'node-firebird';
 import { promisify } from 'util';
 import { IDatabaseConnection } from './i.firebird.connection';
+import { isConnectionError } from './firebird.connection.health';
 
 export default class FirebirdTransaction {
     private transaction: Transaction;
@@ -37,7 +38,7 @@ export default class FirebirdTransaction {
             if (autoCommit) await this.commit(true);
             return response;
         } catch (e) {
-            if (autoCommit) await this.rollback(true);
+            await this.onError(e, autoCommit);
             throw e;
         }
     }
@@ -49,9 +50,21 @@ export default class FirebirdTransaction {
             if (autoCommit) await this.commit(true);
             return response;
         } catch (e) {
-            if (autoCommit) await this.rollback(true);
+            await this.onError(e, autoCommit);
             throw e;
         }
+    }
+    /**
+     * Мёртвое соединение выбрасываем сразу: rollback по нему всё равно не дойдёт
+     * до сервера, а висеть на нём нельзя.
+     */
+    private async onError(e: unknown, autoCommit: boolean): Promise<void> {
+        if (this.connection?.discardIfDead && isConnectionError(e)) {
+            this.connection.discardIfDead(e);
+            this.connection.onTransactionClose(this);
+            return;
+        }
+        if (autoCommit) await this.rollback(true);
     }
     detach(): void {
         if (this.connection) {
@@ -62,12 +75,22 @@ export default class FirebirdTransaction {
     }
     async commit(detach = false): Promise<void> {
         const asyncCommit = promisify(this.transaction.commit);
-        await asyncCommit.call(this.transaction);
+        try {
+            await asyncCommit.call(this.transaction);
+        } catch (e) {
+            await this.onError(e, false);
+            throw e;
+        }
         this.onTransactionClose(detach);
     }
     async rollback(detach = false): Promise<void> {
         const asyncRollback = promisify(this.transaction.rollback);
-        await asyncRollback.call(this.transaction);
+        try {
+            await asyncRollback.call(this.transaction);
+        } catch (e) {
+            await this.onError(e, false);
+            throw e;
+        }
         this.onTransactionClose(detach);
     }
     onTransactionClose(detach: boolean): void {

@@ -18,7 +18,7 @@ describe('Test FirebirdPool', () => {
                             });
                         }),
                         detach: jest.fn(),
-                        query: jest.fn(),
+                        query: jest.fn((q, p, cb) => cb(null, [{ 1: 1 }])),
                         execute: jest.fn(),
                     };
                     callback(null, mockDb);
@@ -121,6 +121,7 @@ describe('Test FirebirdPool', () => {
                             });
                         }),
                         detach: jest.fn(),
+                        query: jest.fn((q, p, cb) => cb(null, [{ 1: 1 }])),
                     });
                 }),
                 destroy: jest.fn(),
@@ -155,6 +156,7 @@ describe('Test FirebirdPool', () => {
                             });
                         }),
                         detach: jest.fn(),
+                        query: jest.fn((q, p, cb) => cb(null, [{ 1: 1 }])),
                     };
                     callback(null, mockDb);
                 }),
@@ -188,6 +190,7 @@ describe('Test FirebirdPool', () => {
                     });
                 }),
                 detach: jest.fn(),
+                query: jest.fn((q, p, cb) => cb(null, [{ 1: 1 }])),
             };
 
             mockPool.get = jest.fn((callback) => callback(null, mockDb));
@@ -200,6 +203,75 @@ describe('Test FirebirdPool', () => {
 
         it('should not fail if no transactions to rollback', async () => {
             await expect(pool.rollbackAllTransactions()).resolves.not.toThrow();
+        });
+    });
+
+    describe('Dead connection handling', () => {
+        // живое соединение отвечает на пинг, мёртвое — никогда (как сокет после рестарта сервера)
+        const aliveDb = () => ({
+            connection: { _pooled: true },
+            detach: jest.fn(),
+            query: jest.fn((q, p, cb) => cb(null, [{ 1: 1 }])),
+            transaction: jest.fn((isolation, cb) =>
+                cb(null, { commit: jest.fn((cb) => cb()), rollback: jest.fn((cb) => cb()) }),
+            ),
+        });
+        const deadDb = () => ({ connection: { _pooled: true }, detach: jest.fn(), query: jest.fn() });
+        const failingDb = () => ({
+            connection: { _pooled: true },
+            detach: jest.fn(),
+            query: jest.fn((q, p, cb) => cb(new Error('Connection shutdown'))),
+        });
+
+        const poolWith = (dbs: any[], max = 5) => {
+            const pool = new FirebirdPool(max, { database: 'test.fdb' }, { validateTimeout: 50 });
+            (pool as any).pool = {
+                get: jest.fn((callback) => callback(null, dbs.shift())),
+                destroy: jest.fn(),
+            };
+            return pool;
+        };
+
+        it('should discard connection that never answers the ping and take the next one', async () => {
+            const dead = deadDb();
+            const alive = aliveDb();
+            const pool = poolWith([dead, alive]);
+
+            const db = await pool.getDatabase();
+
+            expect(db.getDatabase()).toBe(alive);
+            expect(dead.connection._pooled).toBe(false);
+            expect(dead.detach).toHaveBeenCalled();
+        });
+
+        it('should discard connection whose ping fails with an error', async () => {
+            const failing = failingDb();
+            const alive = aliveDb();
+            const pool = poolWith([failing, alive]);
+
+            const db = await pool.getDatabase();
+
+            expect(db.getDatabase()).toBe(alive);
+            expect(failing.connection._pooled).toBe(false);
+        });
+
+        it('should give up after max + 1 dead connections', async () => {
+            const dbs = [deadDb(), deadDb(), deadDb()];
+            const pool = poolWith(dbs, 2);
+
+            await expect(pool.getDatabase()).rejects.toThrow('Firebird connection is dead');
+            expect((pool as any).pool.get).toHaveBeenCalledTimes(3);
+        });
+
+        it('should not ping when validation is disabled', async () => {
+            const dead = deadDb();
+            const pool = new FirebirdPool(5, { database: 'test.fdb' }, { validate: false });
+            (pool as any).pool = { get: jest.fn((callback) => callback(null, dead)), destroy: jest.fn() };
+
+            const db = await pool.getDatabase();
+
+            expect(db.getDatabase()).toBe(dead);
+            expect(dead.query).not.toHaveBeenCalled();
         });
     });
 

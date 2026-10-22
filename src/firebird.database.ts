@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import FirebirdTransaction from './firebird.transaction';
 import { IDatabaseConnection } from './i.firebird.connection';
 import { IFirebirdListener } from './i.firebird.listener';
+import { discardConnection, isConnectionError } from './firebird.connection.health';
 export default class FirebirdDatabase implements IDatabaseConnection {
     constructor(private db: Database = null, private listener: IFirebirdListener = null) {}
     getDatabase(): Database {
@@ -32,19 +33,38 @@ export default class FirebirdDatabase implements IDatabaseConnection {
         this.db.detach();
         this.listener?.onDatabaseDetached(this.db);
     }
+    /**
+     * Сетевая ошибка значит, что соединение мертво: выбрасываем его из пула,
+     * иначе следующий запрос по нему повиснет без ответа.
+     */
+    public discardIfDead(err: unknown): void {
+        if (!this.db || !isConnectionError(err)) return;
+        discardConnection(this.db);
+        this.listener?.onDatabaseDetached(this.db);
+    }
     async query(query: string, params: any[], detach = false): Promise<any[]> {
         this.checkDb();
         const asyncQuery = promisify(this.db.query);
-        const res = await asyncQuery.call(this.db, query, params);
-        if (detach) this.detach();
-        return res;
+        try {
+            const res = await asyncQuery.call(this.db, query, params);
+            if (detach) this.detach();
+            return res;
+        } catch (e) {
+            this.discardIfDead(e);
+            throw e;
+        }
     }
     async execute(query: string, params: any[], detach = false): Promise<any[]> {
         this.checkDb();
         const asyncExecute = promisify(this.db.execute);
-        const res = await asyncExecute.call(this.db, query, params);
-        if (detach) this.detach();
-        return res;
+        try {
+            const res = await asyncExecute.call(this.db, query, params);
+            if (detach) this.detach();
+            return res;
+        } catch (e) {
+            this.discardIfDead(e);
+            throw e;
+        }
     }
     async transaction(isolation: Isolation = ISOLATION_READ_COMMITTED): Promise<FirebirdTransaction> {
         this.checkDb();
